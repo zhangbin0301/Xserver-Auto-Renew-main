@@ -1,0 +1,157 @@
+name: XServer GAME Auto Renew
+
+on:
+  schedule:
+    # 每天北京时间22:35运行 (UTC时间: 14:35)
+    - cron: '35 14 * * *'
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  auto-login:
+    runs-on: ubuntu-22.04
+    
+    # 授予工作流写入仓库内容的权限
+    permissions:
+      contents: write
+      actions: write
+    
+    # 设置超时时间为15分钟 (包含邮箱验证码获取时间)
+    timeout-minutes: 15
+    
+    steps:
+    - name: 🔄 检出代码
+      uses: actions/checkout@v4
+      
+    - name: 🐍 设置 Python 环境
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: 📦 安装 Python 依赖
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: 🎭 安装 Playwright 浏览器
+      run: |
+        playwright install chromium
+        
+    - name: 🎌 安装日文字体支持
+      run: |
+        # 更新包列表
+        sudo apt-get update
+        
+        # 安装日文字体包，支持日文显示
+        sudo apt-get install -y fonts-noto-cjk fonts-noto-cjk-extra
+        
+        # 验证字体安装
+        echo "📝 已安装的日文字体："
+        fc-list | grep -i "noto.*cjk" | head -5
+        
+    - name: 🚀 运行 XServer 完全自动化登录
+      env:
+        # XServer 登录凭据
+        XSERVER_EMAIL: ${{ secrets.XSERVER_EMAIL }}
+        XSERVER_PASSWORD: ${{ secrets.XSERVER_PASSWORD }}
+        CLOUD_MAIL: ${{ secrets.CLOUD_MAIL }}
+        
+        # 以下变量由系统和脚本自动处理：
+        # - GITHUB_ACTIONS: GitHub自动设置为"true"
+        # - USE_HEADLESS: main.py检测到GITHUB_ACTIONS时自动启用无头模式
+        # - 验证码等待时间: main.py中设定为15秒
+      run: |
+        echo "🚀 启动XServer GAME完全自动化登录流程..."
+        echo "📧 XServer邮箱: $XSERVER_EMAIL"
+        echo "🤖 运行环境: GitHub Actions (自动无头模式)"
+        echo "📂 工作目录: $(pwd)"
+        echo "🐍 Python版本: $(python --version)"
+        echo "🎭 浏览器引擎: Playwright (Chromium)"
+        echo ""
+        
+        # 检查主脚本文件
+        echo "📋 检查主脚本文件："
+        ls -la main.py
+        echo ""
+        
+        # 运行主脚本（包含完整的登录和验证码获取功能）
+        # 基于Playwright + Cloudmail API 实现完全自动化
+        python main.py
+        
+    - name: 📝 提交README.md到仓库
+      if: always()
+      run: |
+        git config --local user.email "actions@github.com"
+        git config --local user.name "GitHub Actions"
+        git add README.md
+        git diff --staged --quiet || git commit -m "📊 自动更新续期状态报告 [$(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S')]"
+        git push
+        
+    - name: 📱 发送Telegram通知
+      if: always() && env.TELEGRAM_BOT_TOKEN != '' && env.TELEGRAM_CHAT_ID != ''
+      env:
+        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      run: |
+        # 提取README.md中的关键信息
+        if [ -f "README.md" ]; then
+          # 提取续期结果
+          RENEWAL_STATUS=$(grep "📊续期结果：" README.md | sed 's/.*📊续期结果：\([^<]*\).*/\1/' | sed 's/<br>//')
+          # 提取旧到期时间
+          OLD_DATE=$(grep "🕛️旧到期时间:" README.md | sed 's/.*🕛️旧到期时间: `\([^`]*\)`.*/\1/')
+          # 提取新到期时间（如果存在）
+          NEW_DATE=$(grep "🕡️新到期时间:" README.md | sed 's/.*🕡️新到期时间: `\([^`]*\)`.*/\1/' || echo "")
+        else
+          RENEWAL_STATUS="❓Unknown"
+          OLD_DATE="N/A"
+          NEW_DATE=""
+        fi
+        
+        # 构建通知消息
+        MESSAGE="🐢Xserver续期通知
+        📅执行时间：$(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S')
+        
+        🖥️服务器：🇯🇵Xserver(Mc)
+        📊续期结果：${RENEWAL_STATUS}
+        🕛️旧到期时间：${OLD_DATE}"
+        
+        # 如果有新到期时间，添加到消息中
+        if [ ! -z "$NEW_DATE" ]; then
+          MESSAGE="${MESSAGE}
+        🕡️新到期时间：${NEW_DATE}"
+        fi
+        
+        MESSAGE="${MESSAGE}
+        
+        📋 详细信息：
+        🔗 [查看运行日志](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+        📸 [下载截图](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}#artifacts)"
+        
+        # 发送Telegram消息
+        curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+          -d chat_id="${TELEGRAM_CHAT_ID}" \
+          -d text="${MESSAGE}" \
+          -d parse_mode="Markdown"
+    
+    - name: 📱 Telegram通知跳过提示
+      if: always() && (env.TELEGRAM_BOT_TOKEN == '' || env.TELEGRAM_CHAT_ID == '')
+      env:
+        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      run: echo "ℹ️ 未配置Telegram变量，跳过通知"
+        
+    - name: 📸 上传运行结果
+      if: always()  # 无论成功失败都上传
+      uses: actions/upload-artifact@v4
+      with:
+        name: xserver-auto-login-results-${{ github.run_number }}
+        path: |
+          *.png
+        retention-days: 7  # 保留7天
+        
+    - name: 🧹 清理旧的工作流运行记录
+      uses: MajorScruffy/delete-old-workflow-runs@v0.3.0
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+      with:
+        repository: ${{ github.repository }}
+        older-than-seconds: 3600  # 删除1小时前的记录
