@@ -1,6 +1,8 @@
 # Xserver-Auto-Renew-main
 
-# 设置CLOUD_MAIL变量
+# 设置XSERVER_EMAIL  XSERVER_PASSWORD 变量
+
+#设置CLOUD_MAIL变量
 {
   "API_BASE_URL": "https://mail.gooddns.eu.org",
   "EMAIL": "admin@gooddns.eu.org",
