@@ -122,9 +122,9 @@ jobs:
         
         MESSAGE="${MESSAGE}
         
-        #📋 详细信息：
-        #🔗 [查看运行日志](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
-        #📸 [下载截图](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}#artifacts)"
+        # 📋 详细信息：
+        # 🔗 [查看运行日志](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+        # 📸 [下载截图](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}#artifacts)"
         
         # 发送Telegram消息
         curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
